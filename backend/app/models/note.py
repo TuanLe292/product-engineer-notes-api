@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
-from core.database import Base
+from app.core.database import Base
 from sqlalchemy.sql import func
 
 class Note(Base):
