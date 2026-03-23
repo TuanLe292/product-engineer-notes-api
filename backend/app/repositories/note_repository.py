@@ -1,0 +1,56 @@
+from sqlalchemy.orm import Session
+from sqlalchemy import or_
+from datetime import datetime, timezone
+from app.models.note import Note
+from typing import Optional
+
+class NoteRepository:
+
+    def create(self, db: Session, user_id: int, title: str, content: Optional[str]) -> Note:
+        note = Note(user_id=user_id, title=title, content=content)
+        db.add(note)
+        db.commit()
+        db.refresh(note)
+        self._ensure_updated_at(note)
+        return note
+
+    def get_all(self, db: Session, user_id: int):
+        notes = db.query(Note).filter(Note.user_id == user_id).all()
+        for note in notes:
+            self._ensure_updated_at(note)
+        return notes
+
+    def get_by_id(self, db: Session, note_id: int, user_id: int):
+        note = db.query(Note).filter(Note.id == note_id, Note.user_id == user_id).first()
+        self._ensure_updated_at(note)
+        return note
+
+    def update(self, db: Session, note_id: int, user_id: int, title: str, content: Optional[str]) -> Optional[Note]:
+        note = self.get_by_id(db, note_id, user_id)
+        if note:
+            note.title = title
+            note.content = content
+
+    def delete(self, db: Session, note_id: int, user_id: int):
+        note = self.get_by_id(db, note_id, user_id)
+        if note:
+            db.delete(note)
+            db.commit()
+            return True
+        return False
+
+    def search(self, db: Session, user_id: int, query: Optional[str], page: int, page_size: int):
+        db_query = db.query(Note).filter(Note.user_id == user_id)
+        
+        if query:
+            db_query = db_query.filter(or_(Note.title.ilike(f"%{query}%"), Note.content.ilike(f"%{query}%")))
+
+        total = db_query.count()
+        items = db_query.offset((page - 1) * page_size).limit(page_size)
+        return total, items
+
+    def _ensure_updated_at(self, note: Note) -> None:
+        if note is None:
+            return
+        if note.updated_at is None:
+            note.updated_at = note.created_at or datetime.now(timezone.utc)
